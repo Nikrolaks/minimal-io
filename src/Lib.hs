@@ -1,19 +1,25 @@
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Lib (
-    TestData,
     StringTree,
     AssociativePrecision,
     ShowP,
-    someFunc
+    someFunc,
+    TestData,
+    NatMy,
+    Expr
 ) where
 
 import GHC.Generics
 import Text.Show
+import Debug.Trace
 
 data AssociativePrecision = InfixAP Int | InfixlAP Int | InfixrAP Int deriving Show
 
@@ -58,66 +64,76 @@ checkIsRightPosed (InfixrAP _) True = True
 -- для Infix нет разницы, он побуждает конфликт
 checkIsRightPosed _ _ = False
 
-data StringTree = L String |
-                  Ch String StringTree |
-                  R String StringTree StringTree deriving Show
+data StringTree = V String | L [StringTree] | R StringTree StringTree deriving Show
 
-showInfo :: String -> AssociativePrecision -> Bool -> a -> String
-showInfo s ap rp _ = "[" ++ show ap ++ " " ++ show rp ++ "] " ++ s
+strAppend :: StringTree -> StringTree -> StringTree
+strAppend (L u) (L v) = L $ u ++ v
+strAppend c (L lst) = L $ c : lst
+strAppend c a = L [c, a]
+
+showInfo :: AssociativePrecision -> Bool -> a -> String -> String
+showInfo ap rp x s = "(" ++ show ap ++ ") (" ++ show rp ++ ") (?) (" ++ s ++ ")"
 
 class ShowP a where
-    devTree :: AssociativePrecision -> Bool -> a -> StringTree
-    devTree ap rp = L . showInfo "dummy" ap rp
+    devsTree :: AssociativePrecision -> Bool -> a -> String -> StringTree
+    devsTree ap rp x s = strAppend (V $ "devsTree " ++ showInfo ap rp x s) $ devTree x
+
+    devTree :: a -> StringTree
+    devTree x = strAppend (V "devTree : (?)") $ devsTree uselessAP uselessRP x ""
 
     --- showsPAPrec ap rp x r ++ s === showsPAPrec ap x (r ++ s)
     showsPAPrec :: AssociativePrecision -> Bool -> a -> ShowS
-    showsPAPrec _ _ x s = showP x ++ s
+    showsPAPrec _ _ x s = (showP x) ++ s
     
     showP :: a -> String
     showP x = showsPAPrec uselessAP uselessRP x ""
 
 instance ShowP (Par1 p) where
-    devTree ap rp = L . showInfo "Par1" ap rp
-    showsPAPrec _ _ (Par1 p) = showString "not implemented"
+    devTree x = V "Par1 : (?)"
+    showP (Par1 p) = "NID"
 
 instance ShowP (f p) => ShowP (Rec1 f p) where
-    devTree ap rp = L . showInfo "Rec1" ap rp
-    showsPAPrec _ _ (Rec1 a) = showString "not implemented"
+    devTree x = V "Rec1 : (?)"
+    showP (Rec1 a) = "NID"
 
 instance ShowP (U1 p) where
-    devTree ap rp = L . showInfo "U1" ap rp
+    devTree x = V "U1 : (?)"
     showP U1 = ""
 
 -- TODO
 -- нужно здесь разобраться, чтобы не всегда нужен был контекст Show
 -- CEs 1 почему-то попадет сюда сразу, без прохода через C1...
 instance Show c => ShowP (K1 i c p) where
-    devTree ap rp = L . showInfo "K1" ap rp
+    devTree x = V "K1 : (?)"
     showP k1@(K1 e) = show e
 
 -- in record, поэтому размышления о правильности расстановки опущены
 instance (ShowP (a p), ShowP (b p), ShowP (c p), ShowP ((:*:) b c p)) => ShowP ((:*:) a ((:*:) b c) p) where
-    devTree ap rp x@(a :*: b) = R (showInfo ":*:" ap rp x)
-        (devTree uselessAP uselessRP a) (devTree uselessAP uselessRP b)
+    devsTree ap rp x@(a :*: b) s = 
+        strAppend (V $ "a * b * c " ++ showInfo ap rp x s) $
+            R (devsTree uselessAP uselessRP a s) (devsTree uselessAP uselessRP b s)
     -- so dirty hack
     showsPAPrec _ _ (a :*: b) s =
-        showP a ++ s ++ showsPAPrec uselessAP uselessRP b s
+        (showsPAPrec uselessAP uselessRP a s) ++ (showsPAPrec uselessAP uselessRP b s)
 
 instance (ShowP (a p), ShowP (b p)) => ShowP ((:*:) a b p) where
-    devTree ap rp x@(a :*: b) = R (showInfo ":*:" ap rp x)
-        (devTree ap (checkIsRightPosed ap False) a)
-        (devTree ap (checkIsRightPosed ap True) b)
+    devsTree ap rp x@(a :*: b) s = 
+        strAppend (V $ "a * b " ++ showInfo ap rp x s) $
+            R (devsTree ap (checkIsRightPosed ap False) a s) (devTree b)
     -- so dirty hack
     -- а вот сюда мы можем прийти из Infix a p
     showsPAPrec ap _ (a :*: b) s = 
-        showsPAPrec ap (checkIsRightPosed ap False) a "" ++ 
-            s ++ 
-            showsPAPrec ap (checkIsRightPosed ap True) b ""
+        (showsPAPrec ap (checkIsRightPosed ap False) a s) ++ showP b -- TODO: WHERE IS MY COMMA
 
 instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p))) => ShowP (C1 c ((:*:) a b) p) where
-    devTree ap rp c1@(M1 a) =
-        Ch (showInfo ("C1" ++ (show $ shouldShowParen ap rp (gF2AP . conFixity $ c1))) ap rp c1) $
-            devTree (gF2AP . conFixity $ c1) uselessRP a
+    devsTree ap rp c1@(M1 a) s =
+        strAppend (V $ "C1 with a * b " ++ showInfo ap rp c1 s) (
+            devsTree (gF2AP . conFixity $ c1) uselessRP a $
+                case conFixity c1 of
+                    Prefix -> if conIsRecord c1
+                              then ", "
+                              else " "
+                    Infix _ _ -> " ")
     showsPAPrec ap rp c1@(M1 a) =
         let
             cn = conName c1
@@ -126,19 +142,21 @@ instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p))) => Sho
             next = showsPAPrec myAP uselessRP a
         in
         case cf of
-            -- record 
-            Prefix -> showString $ cn ++ " {" ++ next ", " ++ "}"
-            infixity -> 
+            Prefix -> if conIsRecord c1
+                      then showString $ cn ++ " {" ++ (next ", ") ++ "}"
+                      else showString $ cn ++ " " ++ (next " ")
+            Infix _ _ -> 
                 showParen (shouldShowParen ap rp myAP) .
                     showString . next $ " " ++ cn ++ " "
 
 instance (Constructor c, ShowP (U1 p)) => ShowP (C1 c U1 p) where
-    devTree ap rp = L . showInfo "C1" ap rp
+    devTree x = V $ "C1 with U1 (?)"
     -- only Prefix
     showP c1@(M1 a) = conName c1
 
 instance (Constructor c, ShowP (f p)) => ShowP (C1 c f p) where
-    devTree ap rp c1@(M1 a) = Ch (showInfo "C1" ap rp c1) $ devTree uselessAP uselessRP a
+    devTree c1@(M1 a) = 
+        strAppend (V "C1 with anothers (?)") $ devTree a
     -- only Prefix
     showP c1@(M1 a) =
         let
@@ -149,24 +167,26 @@ instance (Constructor c, ShowP (f p)) => ShowP (C1 c f p) where
            else cn ++ " " ++ next
 
 instance ShowP (f p) => ShowP (D1 c f p) where
-    devTree ap rp d1@(M1 a) = Ch (showInfo "D1" ap rp d1) $ devTree uselessAP uselessRP a
+    devTree d1@(M1 a) = 
+        strAppend (V $ "D1 (?)") $ devTree a
     showP d1@(M1 a) = showP a
 
 instance (Selector c, ShowP (f p)) => ShowP (S1 c f p) where
-    devTree ap rp s1@(M1 a) = Ch (showInfo "S1" ap rp s1) $ devTree uselessAP uselessRP a
-    showP s1@(M1 a) | length sn > 0 = sn ++ " = " ++ next
-                    | otherwise = next
+    devsTree ap rp s1@(M1 a) s = 
+        strAppend (V $ "S1 " ++ showInfo ap rp s1 s) $ devTree a
+    showsPAPrec _ _ s1@(M1 a) s = (if length sn > 0 then sn ++ " = " else "") ++ next ++ s
         where sn = selName s1
               next = showP a
 
 instance ShowP (f p) => ShowP (M1 i c f p) where
-    devTree ap rp m1@(M1 a) = Ch (showInfo "M1" ap rp m1) $ devTree uselessAP uselessRP a
+    devTree m1@(M1 a) = 
+        strAppend (V "M1 (?)") $ devTree a
     showP m1@(M1 a) = showP a
 
 instance (ShowP (l p), ShowP (r p)) => ShowP ((:+:) l r p) where
-    devTree ap rp x = case x of
-        L1 a -> Ch (showInfo "L1" ap rp x) $ devTree uselessAP uselessRP a
-        R1 a -> Ch (showInfo "R1" ap rp x) $ devTree uselessAP uselessRP a
+    devTree x = case x of
+        L1 a -> strAppend (V "L1 (?)") $ devTree a
+        R1 a -> strAppend (V "R1 (?)") $ devTree a
     showP x = case x of
         L1 a -> showP a
         R1 a -> showP a
@@ -203,25 +223,27 @@ infix 3 ://:
 infix 7 :%%:
 
 instance ShowP NatMy where
-    devTree ap rp x = devTree ap rp $ from x
+    devTree = devTree . from
     showP = showP . from
 
 instance Show a => ShowP (TestData a) where
-    devTree ap rp x = devTree ap rp $ from1 x
+    devTree = devTree . from1
     showP = showP . from1
 
 someFunc = do
     --putStrLn "Hello world!"
-    let test1 = Zs :: NatMy
-    let test2 = CEs 3 :: NatMy
-    let test3 = CEs 2 :*- Zs :: NatMy
+    --let test1 = Zs :: NatMy
+    --let test2 = CEs 3 :: NatMy
+    --let test3 = CEs 2 :*- Zs :: NatMy
     let test4 = Ws 4 3 7 :: NatMy
-    let test5 = Ps :: NatMy
-    let test6 = Qs test2 :: NatMy
-    putStrLn . showP $ test1
-    putStrLn . showP $ test2
-    putStrLn . showP $ test3
+    --let test5 = Ps :: NatMy
+    --let test6 = Qs test2 :: NatMy
+    --putStrLn . showP $ test1
+    --putStrLn . showP $ test2
+    --putStrLn . showP $ test3
     putStrLn . showP $ test4
-    putStrLn . showP $ test5
-    putStrLn . showP $ test6
+    --putStrLn . showP $ test5
+    --putStrLn . showP $ test6
+    --putStrLn "-------------------------"
+    print . devTree $ test4
     --print . fromM1 . from $ test4
