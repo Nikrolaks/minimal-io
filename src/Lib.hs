@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonoLocalBinds #-}
 
 module Lib (
     StringTree,
@@ -18,8 +19,6 @@ module Lib (
 ) where
 
 import GHC.Generics
-import Text.Show
-import Debug.Trace
 
 data AssociativePrecision = InfixAP Int | InfixlAP Int | InfixrAP Int deriving Show
 
@@ -67,7 +66,6 @@ checkIsRightPosed _ _ = False
 data StringTree = V String | L [StringTree] | R StringTree StringTree deriving Show
 
 strAppend :: StringTree -> StringTree -> StringTree
-strAppend (L u) (L v) = L $ u ++ v
 strAppend c (L lst) = L $ c : lst
 strAppend c a = L [c, a]
 
@@ -81,7 +79,7 @@ class ShowP a where
     devTree :: a -> StringTree
     devTree x = strAppend (V "devTree : (?)") $ devsTree uselessAP uselessRP x ""
 
-    --- showsPAPrec ap rp x r ++ s === showsPAPrec ap x (r ++ s)
+    --- showsPAPrec ap rp x r ++ s === showsPAPrec ap rp x (r ++ s)
     showsPAPrec :: AssociativePrecision -> Bool -> a -> ShowS
     showsPAPrec _ _ x s = (showP x) ++ s
     
@@ -89,6 +87,9 @@ class ShowP a where
     showP x = showsPAPrec uselessAP uselessRP x ""
 
 class ShowP a => ShowProd a where
+    showDevTree :: AssociativePrecision -> Bool -> a -> [StringTree]
+    showDevTree ap rp x = [devsTree ap rp x "-"]
+
     showProd :: AssociativePrecision -> Bool -> a -> [ShowS]
     showProd ap rp x = [showsPAPrec ap rp x]
 
@@ -114,17 +115,25 @@ instance Show c => ShowP (K1 i c p) where
 -- dummy
 instance (ShowP (a p), ShowP (b p)) => ShowP ((:*:) a b p) where
     devTree (a :*: b) = V "not implemented"
-    showP (a :*: b) = showP a ++ showP b
+    showP (a :*: b) = showP a ++ "QWERTY" ++ showP b
 
-instance (ShowP (a p), ShowP (b p), ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
+instance (ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
+    showDevTree ap _ (a :*: b) = 
+        let
+            rp = checkIsRightPosed ap False
+        in
+            showDevTree ap rp a ++ showDevTree ap (not rp) b
+
     showProd ap _ (a :*: b) =
         let
             rp = checkIsRightPosed ap False
         in
             showProd ap rp a ++ showProd ap (not rp) b
 
-instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) => ShowP (C1 c ((:*:) a b) p) where
-    devTree x = V "not implemented"
+instance (Constructor c, ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) => ShowP (C1 c ((:*:) a b) p) where
+    devsTree ap rp c1@(M1 a) s = strAppend (V $ "C1 with prod " ++ showInfo ap rp a s) .
+        foldr (\u v -> strAppend (L [u]) v) (L []) $
+            showDevTree (gF2AP . conFixity $ c1) uselessRP a
     showsPAPrec ap rp c1@(M1 a) =
         let
             cn = conName c1
@@ -138,7 +147,7 @@ instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p)), ShowPr
                       then showString $ cn ++ " {" ++ conv ", " "}"
                       else showString (cn ++ " ") . conv " "
             Infix _ _ -> 
-                showParen (shouldShowParen ap rp myAP) $ conv cn
+                showParen (shouldShowParen ap rp myAP) . conv $ " " ++ cn ++ " "
 
 instance (Constructor c, ShowP (U1 p)) => ShowP (C1 c U1 p) where
     devTree x = V $ "C1 with U1 (?)"
@@ -169,12 +178,12 @@ instance (Selector c, ShowP (f p)) => ShowP (S1 c f p) where
         where sn = selName s1
               next = showP a
 
-instance ShowP (f p) => ShowProd (M1 i c f p) where
+instance (Selector c, ShowP (f p)) => ShowProd (S1 c f p) where
 
 instance ShowP (f p) => ShowP (M1 i c f p) where
     devTree m1@(M1 a) = 
         strAppend (V "M1 (?)") $ devTree a
-    showP m1@(M1 a) = showP a
+    showP m1@(M1 a) = "devil = " ++ showP a
 
 instance (ShowP (l p), ShowP (r p)) => ShowP ((:+:) l r p) where
     devTree x = case x of
@@ -190,6 +199,7 @@ data NatMy = Zs |
              Qs {es :: NatMy} |
              CEs Int |
              NatMy :*- NatMy |
+             Hs Int NatMy Int |
              Ws {ws1 :: Int, ws2 :: Int, ws3 :: Int, ws4 :: Int, ws5 :: Int} deriving (Show, Generic)
 
 data TestData a = Z |
@@ -225,18 +235,20 @@ instance Show a => ShowP (TestData a) where
 
 someFunc = do
     --putStrLn "Hello world!"
-    --let test1 = Zs :: NatMy
-    --let test2 = CEs 3 :: NatMy
-    --let test3 = CEs 2 :*- Zs :: NatMy
+    let test1 = Zs :: NatMy
+    let test2 = CEs 3 :: NatMy
+    let test3 = CEs 2 :*- Zs :: NatMy
     let test4 = Ws 4 3 7 1 9 :: NatMy
-    --let test5 = Ps :: NatMy
-    --let test6 = Qs test2 :: NatMy
-    --putStrLn . showP $ test1
-    --putStrLn . showP $ test2
-    --putStrLn . showP $ test3
+    let test5 = Ps :: NatMy
+    let test6 = Qs test2 :: NatMy
+    let test7 = Hs 12 Zs 13
+    putStrLn . showP $ test1
+    putStrLn . showP $ test2
+    putStrLn . showP $ test3
     putStrLn . showP $ test4
-    --putStrLn . showP $ test5
-    --putStrLn . showP $ test6
+    putStrLn . showP $ test5
+    putStrLn . showP $ test6
+    putStrLn . showP $ test7
     --putStrLn "-------------------------"
-    print . devTree $ test4
+    --print . devTree $ test4
     --print . fromM1 . from $ test4
