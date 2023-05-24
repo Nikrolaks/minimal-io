@@ -88,6 +88,10 @@ class ShowP a where
     showP :: a -> String
     showP x = showsPAPrec uselessAP uselessRP x ""
 
+class ShowP a => ShowProd a where
+    showProd :: AssociativePrecision -> Bool -> a -> [ShowS]
+    showProd ap rp x = [showsPAPrec ap rp x]
+
 instance ShowP (Par1 p) where
     devTree x = V "Par1 : (?)"
     showP (Par1 p) = "NID"
@@ -107,47 +111,34 @@ instance Show c => ShowP (K1 i c p) where
     devTree x = V "K1 : (?)"
     showP k1@(K1 e) = show e
 
--- in record, поэтому размышления о правильности расстановки опущены
-instance (ShowP (a p), ShowP (b p), ShowP (c p), ShowP ((:*:) b c p)) => ShowP ((:*:) a ((:*:) b c) p) where
-    devsTree ap rp x@(a :*: b) s = 
-        strAppend (V $ "a * b * c " ++ showInfo ap rp x s) $
-            R (devsTree uselessAP uselessRP a s) (devsTree uselessAP uselessRP b s)
-    -- so dirty hack
-    showsPAPrec _ _ (a :*: b) s =
-        (showsPAPrec uselessAP uselessRP a s) ++ (showsPAPrec uselessAP uselessRP b s)
-
+-- dummy
 instance (ShowP (a p), ShowP (b p)) => ShowP ((:*:) a b p) where
-    devsTree ap rp x@(a :*: b) s = 
-        strAppend (V $ "a * b " ++ showInfo ap rp x s) $
-            R (devsTree ap (checkIsRightPosed ap False) a s) (devTree b)
-    -- so dirty hack
-    -- а вот сюда мы можем прийти из Infix a p
-    showsPAPrec ap _ (a :*: b) s = 
-        (showsPAPrec ap (checkIsRightPosed ap False) a s) ++ showP b -- TODO: WHERE IS MY COMMA
+    devTree (a :*: b) = V "not implemented"
+    showP (a :*: b) = showP a ++ showP b
 
-instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p))) => ShowP (C1 c ((:*:) a b) p) where
-    devsTree ap rp c1@(M1 a) s =
-        strAppend (V $ "C1 with a * b " ++ showInfo ap rp c1 s) (
-            devsTree (gF2AP . conFixity $ c1) uselessRP a $
-                case conFixity c1 of
-                    Prefix -> if conIsRecord c1
-                              then ", "
-                              else " "
-                    Infix _ _ -> " ")
+instance (ShowP (a p), ShowP (b p), ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
+    showProd ap _ (a :*: b) =
+        let
+            rp = checkIsRightPosed ap False
+        in
+            showProd ap rp a ++ showProd ap (not rp) b
+
+instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) => ShowP (C1 c ((:*:) a b) p) where
+    devTree x = V "not implemented"
     showsPAPrec ap rp c1@(M1 a) =
         let
             cn = conName c1
             cf = conFixity c1
             myAP = gF2AP cf
-            next = showsPAPrec myAP uselessRP a
+            next = showProd myAP uselessRP a
+            conv ast = foldr1 (\u v -> showString (u ast) . v) next
         in
         case cf of
             Prefix -> if conIsRecord c1
-                      then showString $ cn ++ " {" ++ (next ", ") ++ "}"
-                      else showString $ cn ++ " " ++ (next " ")
+                      then showString $ cn ++ " {" ++ conv ", " "}"
+                      else showString (cn ++ " ") . conv " "
             Infix _ _ -> 
-                showParen (shouldShowParen ap rp myAP) .
-                    showString . next $ " " ++ cn ++ " "
+                showParen (shouldShowParen ap rp myAP) $ conv cn
 
 instance (Constructor c, ShowP (U1 p)) => ShowP (C1 c U1 p) where
     devTree x = V $ "C1 with U1 (?)"
@@ -178,6 +169,8 @@ instance (Selector c, ShowP (f p)) => ShowP (S1 c f p) where
         where sn = selName s1
               next = showP a
 
+instance ShowP (f p) => ShowProd (M1 i c f p) where
+
 instance ShowP (f p) => ShowP (M1 i c f p) where
     devTree m1@(M1 a) = 
         strAppend (V "M1 (?)") $ devTree a
@@ -197,7 +190,7 @@ data NatMy = Zs |
              Qs {es :: NatMy} |
              CEs Int |
              NatMy :*- NatMy |
-             Ws {ws1 :: Int, ws2 :: Int, ws3 :: Int} deriving (Show, Generic)
+             Ws {ws1 :: Int, ws2 :: Int, ws3 :: Int, ws4 :: Int, ws5 :: Int} deriving (Show, Generic)
 
 data TestData a = Z |
                   S (TestData a) |
@@ -235,7 +228,7 @@ someFunc = do
     --let test1 = Zs :: NatMy
     --let test2 = CEs 3 :: NatMy
     --let test3 = CEs 2 :*- Zs :: NatMy
-    let test4 = Ws 4 3 7 :: NatMy
+    let test4 = Ws 4 3 7 1 9 :: NatMy
     --let test5 = Ps :: NatMy
     --let test6 = Qs test2 :: NatMy
     --putStrLn . showP $ test1
