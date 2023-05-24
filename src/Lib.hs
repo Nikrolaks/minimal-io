@@ -47,9 +47,9 @@ checkConflict _ _ = False
 shouldShowParen :: AssociativePrecision -> Bool -> AssociativePrecision -> Bool
 shouldShowParen lastAP isRightPosed curAP =
     getPrecision curAP <= getPrecision lastAP &&
-    getPrecision curAP < getPrecision lastAP ||
+    (getPrecision curAP < getPrecision lastAP ||
     checkConflict lastAP curAP ||
-    not isRightPosed
+    not isRightPosed)
 
 -- 2 - это левый или правый аргумент
 checkIsRightPosed :: AssociativePrecision -> Bool -> Bool
@@ -115,8 +115,9 @@ instance (ShowP (a p), ShowP (b p)) => ShowP ((:*:) a b p) where
             showsPAPrec ap (checkIsRightPosed ap True) b ""
 
 instance (Constructor c, ShowP (a p), ShowP (b p), ShowP (((:*:) a b p))) => ShowP (C1 c ((:*:) a b) p) where
-    devTree ap rp c1@(M1 a) = Ch (showInfo "C1" ap rp c1) $
-        devTree (gF2AP . conFixity $ c1) uselessRP a
+    devTree ap rp c1@(M1 a) =
+        Ch (showInfo ("C1" ++ (show $ shouldShowParen ap rp (gF2AP . conFixity $ c1))) ap rp c1) $
+            devTree (gF2AP . conFixity $ c1) uselessRP a
     showsPAPrec ap rp c1@(M1 a) =
         let
             cn = conName c1
@@ -211,17 +212,16 @@ instance Show a => ShowP (TestData a) where
 
 someFunc = do
     --putStrLn "Hello world!"
-    --let test1 = Zs :: NatMy
-    --let test2 = CEs 3 :: NatMy
+    let test1 = Zs :: NatMy
+    let test2 = CEs 3 :: NatMy
     let test3 = CEs 2 :*- Zs :: NatMy
-    --let test4 = Ws 4 3 7 :: NatMy
-    --let test5 = Ps :: NatMy
-    --let test6 = Qs test2 :: NatMy
-    --putStrLn . showP $ test1
-    --putStrLn . showP $ test2
+    let test4 = Ws 4 3 7 :: NatMy
+    let test5 = Ps :: NatMy
+    let test6 = Qs test2 :: NatMy
+    putStrLn . showP $ test1
+    putStrLn . showP $ test2
     putStrLn . showP $ test3
-    print $ devTree uselessAP uselessRP test3
-    --putStrLn . showP $ test4
-    --putStrLn . showP $ test5
-    --putStrLn . showP $ test6
+    putStrLn . showP $ test4
+    putStrLn . showP $ test5
+    putStrLn . showP $ test6
     --print . fromM1 . from $ test4
