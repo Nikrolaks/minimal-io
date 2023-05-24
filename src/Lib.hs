@@ -82,10 +82,10 @@ class ShowP a where
 
     --- showsPAPrec ap rp x r ++ s === showsPAPrec ap rp x (r ++ s)
     showsPAPrec :: AssociativePrecision -> Bool -> a -> ShowS
-    showsPAPrec _ _ x s = trace "default shows " $ (showP x) ++ s
+    showsPAPrec _ _ x s = (showP x) ++ s
     
     showP :: a -> String
-    showP x = trace "default showP" $ showsPAPrec uselessAP uselessRP x ""
+    showP x = showsPAPrec uselessAP uselessRP x ""
 
 instance ShowP Int where
     showP = show
@@ -95,35 +95,35 @@ class ShowP a => ShowProd a where
     showDevTree ap rp x = [devsTree ap rp x "-"]
 
     showProd :: AssociativePrecision -> Bool -> a -> [ShowS]
-    showProd ap rp x = trace ("showProd default " ++ show ap ++ " " ++ show rp) $ [showsPAPrec ap rp x]
+    showProd ap rp x = [showsPAPrec ap rp x]
 
 instance ShowP (Par1 p) where
     devTree x = V "Par1 : (?)"
-    showP (Par1 p) = trace "Par1" $ "NID"
+    showP (Par1 p) = "NID"
 
 instance ShowP (f p) => ShowP (Rec1 f p) where
     devTree x = V "Rec1 : (?)"
-    showP (Rec1 a) = trace "Rec1" $ "NID"
+    showP (Rec1 a) = "NID"
 
 instance ShowP (U1 p) where
     devTree x = V "U1 : (?)"
-    showP U1 = trace "U1" $ ""
+    showP U1 = ""
 
 -- TODO
 -- нужно здесь разобраться, чтобы не всегда нужен был контекст Show
 -- CEs 1 почему-то попадет сюда сразу, без прохода через C1...
 instance ShowP c => ShowP (Rec0 c p) where
     devTree x = V "Rec0 : (?)"
-    showsPAPrec ap rp k1@(K1 e) = trace "Rec0" . showsPAPrec ap rp e
+    showsPAPrec ap rp k1@(K1 e) = showsPAPrec ap rp e
 
 instance Show c => ShowP (K1 i c p) where
     devTree x = V "K1 : (?)"
-    showsPAPrec ap rp k1@(K1 e) = trace "K1" . showString $ show e
+    showsPAPrec ap rp k1@(K1 e) = showString $ show e
 
 -- dummy
 instance (ShowP (a p), ShowP (b p)) => ShowP ((:*:) a b p) where
     devTree (a :*: b) = V "not implemented"
-    showP (a :*: b) = trace ":*: WARNING" $ showP a ++ showP b
+    showP (a :*: b) = showP a ++ showP b
 
 instance (ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
     showDevTree ap _ (a :*: b) = 
@@ -142,7 +142,7 @@ instance (Constructor c, ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) 
     devsTree ap rp c1@(M1 a) s = strAppend (V $ "C1 with prod " ++ showInfo ap rp a s) .
         foldr (\u v -> strAppend (L [u]) v) (L []) $
             showDevTree (gF2AP . conFixity $ c1) uselessRP a
-    showsPAPrec ap rp c1@(M1 a) = trace ("C1 PAP " ++ show ap ++ " " ++ show rp) $
+    showsPAPrec ap rp c1@(M1 a) =
         let
             cn = conName c1
             cf = conFixity c1
@@ -160,13 +160,13 @@ instance (Constructor c, ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) 
 instance (Constructor c, ShowP (U1 p)) => ShowP (C1 c U1 p) where
     devTree x = V $ "C1 with U1 (?)"
     -- only Prefix
-    showP c1@(M1 a) = trace "C1 U1" $ conName c1
+    showP c1@(M1 a) = conName c1
 
 instance (Constructor c, ShowP (f p)) => ShowP (C1 c f p) where
     devTree c1@(M1 a) = 
         strAppend (V "C1 with anothers (?)") $ devTree a
     -- only Prefix
-    showP c1@(M1 a) = trace "C1 default" $ 
+    showP c1@(M1 a) =  
         let
             cn = conName c1
             next = showP a
@@ -177,12 +177,12 @@ instance (Constructor c, ShowP (f p)) => ShowP (C1 c f p) where
 instance ShowP (f p) => ShowP (D1 c f p) where
     devTree d1@(M1 a) = 
         strAppend (V $ "D1 (?)") $ devTree a
-    showP d1@(M1 a) = trace "D1" $ showP a
+    showP d1@(M1 a) = showP a
 
 instance (Selector c, ShowP (f p)) => ShowP (S1 c f p) where
     devsTree ap rp s1@(M1 a) s = 
         strAppend (V $ "S1 " ++ showInfo ap rp s1 s) $ devTree a
-    showsPAPrec ap rp s1@(M1 a) = trace "S1" $ showString (if length sn > 0 then sn ++ " = " else "") . next
+    showsPAPrec ap rp s1@(M1 a) = showString (if length sn > 0 then sn ++ " = " else "") . next
         where sn = selName s1
               next = showsPAPrec ap rp a
 
@@ -191,15 +191,15 @@ instance (Selector c, ShowP (f p)) => ShowProd (S1 c f p) where
 instance ShowP (f p) => ShowP (M1 i c f p) where
     devTree m1@(M1 a) = 
         strAppend (V "M1 (?)") $ devTree a
-    showP m1@(M1 a) = trace "M1" $ showP a
+    showP m1@(M1 a) = showP a
 
 instance (ShowP (l p), ShowP (r p)) => ShowP ((:+:) l r p) where
     devTree x = case x of
         L1 a -> strAppend (V "L1 (?)") $ devTree a
         R1 a -> strAppend (V "R1 (?)") $ devTree a
     showP x = case x of
-        L1 a -> trace "L1" $ showP a
-        R1 a -> trace "R1" $ showP a
+        L1 a -> showP a
+        R1 a -> showP a
 
 data NatMy = Zs |
              Ss NatMy |
@@ -276,5 +276,8 @@ testSet2 = [
     ]
 
 someFunc = do
-    print . showP $ testSet2 !! 0
+    putStrLn . showP $ testSet2 !! 0
+    putStrLn . show $ testSet2 !! 0
+    putStrLn . showP $ testSet2 !! 1
+    putStrLn . show $ testSet2 !! 1
     
