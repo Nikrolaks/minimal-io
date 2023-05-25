@@ -79,7 +79,7 @@ class ShowP a => ShowProd a where
     showProd ap rp x = [showsPAPrec ap rp x]
 
 instance ShowP p => ShowP (Par1 p) where
-    showP (Par1 p) = showP p
+    showsPAPrec ap rp (Par1 p) = showsPAPrec ap rp p
 
 instance ShowP (f p) => ShowP (Rec1 f p) where
     showsPAPrec ap rp (Rec1 a) = showsPAPrec ap rp a
@@ -87,10 +87,7 @@ instance ShowP (f p) => ShowP (Rec1 f p) where
 instance ShowP (U1 p) where
     showP U1 = ""
 
--- TODO
--- нужно здесь разобраться, чтобы не всегда нужен был контекст Show
--- CEs 1 почему-то попадет сюда сразу, без прохода через C1...
-instance ShowP c => ShowP (Rec0 c p) where
+instance (Show c, ShowP c) => ShowP (Rec0 c p) where
     showsPAPrec ap rp k1@(K1 e) = showsPAPrec ap rp e
 
 --instance Show c => ShowP (K1 i c p) where
@@ -110,18 +107,28 @@ instance (ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
 instance (Constructor c, ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) => ShowP (C1 c ((:*:) a b) p) where
     showsPAPrec ap rp c1@(M1 a) =
         let
+            cn :: String
             cn = conName c1
+            
+            cf :: Fixity
             cf = conFixity c1
+            
+            myAP :: AssociativePrecision
             myAP = gF2AP cf
+            
+            next :: [ShowS]
             next = showProd myAP uselessRP a
+            
+            conv :: String -> ShowS
             conv ast = foldr1 (\u v -> showString (u ast) . v) next
+            
+            variants :: Fixity -> ShowS
+            variants Prefix = if conIsRecord c1
+                              then showString $ cn ++ " {" ++ (conv ", ") "}"
+                              else showString (cn ++ " ") . conv " "
+            variants _ = conv $ " " ++ cn ++ " "
         in
-        case cf of
-            Prefix -> if conIsRecord c1
-                      then showString $ cn ++ " {" ++ conv ", " "}"
-                      else showString (cn ++ " ") . conv " "
-            Infix _ _ -> 
-                showParen (shouldShowParen ap rp myAP) . conv $ " " ++ cn ++ " "
+            showParen (shouldShowParen ap rp myAP) $ variants cf
 
 instance (Constructor c, ShowP (U1 p)) => ShowP (C1 c U1 p) where
     -- only Prefix
@@ -129,31 +136,36 @@ instance (Constructor c, ShowP (U1 p)) => ShowP (C1 c U1 p) where
 
 instance (Constructor c, ShowP (f p)) => ShowP (C1 c f p) where
     -- only Prefix
-    showP c1@(M1 a) =  
+    showsPAPrec ap rp c1@(M1 a) =  
         let
             cn = conName c1
-            next = showP a
-        in if conIsRecord c1
-           then cn ++ " {" ++ next ++ "}"
-           else cn ++ " " ++ next
+            next = showsPAPrec prefixAP uselessRP a
+        in
+            showParen (shouldShowParen ap rp . gF2AP . conFixity $ c1) $ showString (
+                if conIsRecord c1
+                then cn ++ " {" ++ next "}"
+                else cn ++ " " ++ next "")
 
 instance ShowP (f p) => ShowP (D1 c f p) where
-    showP d1@(M1 a) = showP a
+    showsPAPrec ap rp d1@(M1 a) = showsPAPrec ap rp a
 
 instance (Selector c, ShowP (f p)) => ShowP (S1 c f p) where 
-    showsPAPrec ap rp s1@(M1 a) = showString (if length sn > 0 then sn ++ " = " else "") . next
+    showsPAPrec ap rp s1@(M1 a) =
+            if length sn > 0
+            then showString (sn ++ " = ") . showsPAPrec uselessAP uselessRP a
+            else showString "" . showsPAPrec ap rp a
         where sn = selName s1
-              next = showsPAPrec ap rp a
 
 instance (Selector c, ShowP (f p)) => ShowProd (S1 c f p) where
 
 instance ShowP (f p) => ShowP (M1 i c f p) where
-    showP m1@(M1 a) = showP a
+    showsPAPrec ap rp m1@(M1 a) = showsPAPrec ap rp a
 
 instance (ShowP (l p), ShowP (r p)) => ShowP ((:+:) l r p) where
-    showP x = case x of
-        L1 a -> showP a
-        R1 a -> showP a
+    showsPAPrec ap rp x = 
+        case x of
+            L1 a -> showsPAPrec ap rp a
+            R1 a -> showsPAPrec ap rp a
 
 data NatMy = Zs |
              Ss NatMy |
@@ -204,12 +216,15 @@ infix 3 ://:
 infix 7 :%%:
 
 instance ShowP NatMy where
+    showsPAPrec ap rp = showsPAPrec ap rp . from
     showP = showP . from
 
 instance ShowP ExprPrim where
+    showsPAPrec ap rp = showsPAPrec ap rp . from
     showP = showP . from
 
 instance ShowP a => ShowP (TestData a) where
+    showsPAPrec ap rp = showsPAPrec ap rp . from1
     showP = showP . from1
 
 testSet1 :: [NatMy]
@@ -236,12 +251,8 @@ testSet3 = [
     P,
     H 14 Zs (CE (CEs 17))]
 
-data Exa = O | I NatMy deriving (Show, Generic)
-
-instance ShowP Exa where
-    showP = showP . from
-
 someFunc = do
-    putStrLn . showP $ I (CEs 1)
-    putStrLn . show $ I (CEs 1)
+    print . all (\t -> showP t == show t) $ testSet1
+    print . all (\t -> length (showP t) < length (show t)) $ testSet2
+    print . all (\t -> showP t == show t) $ testSet3
     
