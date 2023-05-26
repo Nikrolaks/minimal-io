@@ -87,15 +87,12 @@ instance ShowP (f p) => ShowP (Rec1 f p) where
 instance ShowP (U1 p) where
     showP U1 = ""
 
-instance (Show c, ShowP c) => ShowP (Rec0 c p) where
-    showsPAPrec ap rp k1@(K1 e) = showsPAPrec ap rp e
-
---instance Show c => ShowP (K1 i c p) where
---    showsPAPrec ap rp k1@(K1 e) = showString $ show e
+instance ShowP c => ShowP (Rec0 c p) where
+    showsPAPrec ap rp r0@(K1 e) = showsPAPrec ap rp e
 
 -- dummy
 instance (ShowP (a p), ShowP (b p)) => ShowP ((:*:) a b p) where
-    showP (a :*: b) = showP a ++ showP b
+    showP (a :*: b) = undefined
 
 instance (ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
     showProd ap _ (a :*: b) =
@@ -104,7 +101,7 @@ instance (ShowProd (a p), ShowProd (b p)) => ShowProd ((:*:) a b p) where
         in
             showProd ap rp a ++ showProd ap (not rp) b
 
-instance (Constructor c, ShowP (((:*:) a b p)), ShowProd (a p), ShowProd (b p)) => ShowP (C1 c ((:*:) a b) p) where
+instance (Constructor c, ShowP ((:*:) a b p), ShowProd (a p), ShowProd (b p)) => ShowP (C1 c ((:*:) a b) p) where
     showsPAPrec ap rp c1@(M1 a) =
         let
             cn :: String
