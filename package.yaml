@@ -1,6 +1,6 @@
-name:                show-minimal
+name:                minimal-io
 version:             0.1.0.0
-github:              "Nikrolaks/show-minimal"
+github:              "Nikrolaks/minimal-io"
 license:             BSD3
 author:              "Nikrolaks"
 maintainer:          "nikrolaks17@gmail.com"
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/Nikrolaks/show-minimal#readme>
+description:         Please see the README on GitHub at <https://github.com/Nikrolaks/minimal-io#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -36,7 +36,7 @@ library:
   source-dirs: src
 
 executables:
-  show-minimal-exe:
+  minimal-io-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -44,10 +44,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - show-minimal
+    - minimal-io
 
 tests:
-  show-minimal-test:
+  minimal-io-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -55,4 +55,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - show-minimal
+    - minimal-io

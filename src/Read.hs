@@ -7,60 +7,25 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE DataKinds #-}
 
 module Read (
-    AssociativePrecision,
-    ReadP,
+    ReadP(..),
     someFunc2
 ) where
 
+import Base (
+    AssociativePrecision,
+    prefixAP,
+    uselessAP,
+    uselessRP,
+    gF2AP,
+    getPrecision,
+    checkConflict,
+    shouldParen,
+    checkIsRightPosed)
+
 import GHC.Generics
 import Debug.Trace
-
-data AssociativePrecision = InfixAP Int | InfixlAP Int | InfixrAP Int deriving Show
-
-prefixAP :: AssociativePrecision
-prefixAP = InfixAP 10
-
-uselessAP :: AssociativePrecision
-uselessAP = InfixAP 0
-
-uselessRP :: Bool
-uselessRP = True
-
-gF2AP :: Fixity -> AssociativePrecision
-gF2AP Prefix = prefixAP
-gF2AP (Infix LeftAssociative n) = InfixlAP n
-gF2AP (Infix RightAssociative n) = InfixrAP n
-gF2AP (Infix NotAssociative n) = InfixAP n
-
-getPrecision :: AssociativePrecision -> Int
-getPrecision (InfixAP n) = n
-getPrecision (InfixlAP n) = n
-getPrecision (InfixrAP n) = n
-
-checkConflict :: AssociativePrecision -> AssociativePrecision -> Bool
-checkConflict (InfixAP _) _ = True
-checkConflict _ (InfixAP _) = True
-checkConflict (InfixlAP _) (InfixrAP _) = True
-checkConflict (InfixrAP _) (InfixlAP _) = True
-checkConflict _ _ = False
-
-shouldParen :: AssociativePrecision -> Bool -> AssociativePrecision -> Bool
-shouldParen lastAP isRightPosed curAP =
-    getPrecision curAP <= getPrecision lastAP &&
-    (getPrecision curAP < getPrecision lastAP ||
-    checkConflict lastAP curAP ||
-    not isRightPosed)
-
--- 2 - это левый или правый аргумент
-checkIsRightPosed :: AssociativePrecision -> Bool -> Bool
-checkIsRightPosed (InfixlAP _) False = True
-checkIsRightPosed (InfixrAP _) True = True
--- для Infix нет разницы, он побуждает конфликт
-checkIsRightPosed _ _ = False
 
 class ReadP a where
     readsPAPrec :: AssociativePrecision -> Bool -> ReadS a

@@ -4,11 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           show-minimal
+name:           minimal-io
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/Nikrolaks/show-minimal#readme>
-homepage:       https://github.com/Nikrolaks/show-minimal#readme
-bug-reports:    https://github.com/Nikrolaks/show-minimal/issues
+description:    Please see the README on GitHub at <https://github.com/Nikrolaks/minimal-io#readme>
+homepage:       https://github.com/Nikrolaks/minimal-io#readme
+bug-reports:    https://github.com/Nikrolaks/minimal-io/issues
 author:         Nikrolaks
 maintainer:     nikrolaks17@gmail.com
 copyright:      Nikrolaks
@@ -21,13 +21,16 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/Nikrolaks/show-minimal
+  location: https://github.com/Nikrolaks/minimal-io
 
 library
   exposed-modules:
+      Base
       Lib
+      Read
+      Show
   other-modules:
-      Paths_show_minimal
+      Paths_minimal_io
   hs-source-dirs:
       src
   ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
@@ -35,27 +38,27 @@ library
       base >=4.7 && <5
   default-language: Haskell2010
 
-executable show-minimal-exe
+executable minimal-io-exe
   main-is: Main.hs
   other-modules:
-      Paths_show_minimal
+      Paths_minimal_io
   hs-source-dirs:
       app
   ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , show-minimal
+    , minimal-io
   default-language: Haskell2010
 
-test-suite show-minimal-test
+test-suite minimal-io-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_show_minimal
+      Paths_minimal_io
   hs-source-dirs:
       test
   ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , show-minimal
+    , minimal-io
   default-language: Haskell2010
