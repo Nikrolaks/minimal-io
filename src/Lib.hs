@@ -6,4 +6,5 @@ import Show
 import Read
 
 someFunc :: IO ()
-someFunc = someFunc2
+someFunc = do
+    putStrLn $ "Hello! This is my course work"
