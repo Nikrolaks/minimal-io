@@ -25,7 +25,6 @@ import Base (
     checkIsRightPosed)
 
 import GHC.Generics
-import Debug.Trace
 
 class ReadP a where
     readsPAPrec :: AssociativePrecision -> Bool -> ReadS a
@@ -47,7 +46,7 @@ instance ReadP (f p) => ReadP (Rec1 f p) where
     readsPAPrec ap rp s = [(Rec1 a, r) | (a, r) <- readsPAPrec ap rp s]
 
 instance ReadP (U1 p) where
-    readsPAPrec _ _ s = []
+    readsPAPrec _ _ s = [(U1, s)]
 
 instance ReadP c => ReadP (Rec0 c p) where
     readsPAPrec ap rp s = [(K1 e, r) | (e, r) <- readsPAPrec ap rp s]
@@ -102,8 +101,7 @@ instance (Constructor c, ReadP ((:*:) a b p), ReadProd (a p), ReadProd (b p), Re
 
 instance (Constructor c, ReadP (U1 p)) => ReadP (C1 c U1 p) where
     -- only Prefix
-    readsPAPrec _ _ s | fst (lex s !! 0) == conName (undefined :: C1 c U1 p) = [(M1 U1, r) | (_, r) <- lex s]
-                      | otherwise = []
+    readsPAPrec _ _ s = let cn = conName (undefined :: C1 c U1 p) in [(M1 U1, r) | (cn, r) <- lex s]
 
 instance (Constructor c, ReadP (f p)) => ReadP (C1 c f p) where
     -- only Prefix
